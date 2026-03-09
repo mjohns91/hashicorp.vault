@@ -5,11 +5,9 @@
 
 from __future__ import absolute_import, division, print_function
 
-
 __metaclass__ = type
 
 from abc import ABC, abstractmethod
-
 
 try:
     import requests
@@ -134,7 +132,7 @@ class AppRoleAuthenticator(Authenticator):
             headers["X-Vault-Namespace"] = vault_namespace
 
         try:
-            response = requests.post(login_url, json=payload, headers=headers)
+            response = requests.post(login_url, json=payload, headers=headers, timeout=90)
 
             response.raise_for_status()
 
