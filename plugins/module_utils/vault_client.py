@@ -10,6 +10,7 @@ __metaclass__ = type
 import json  # noqa: F401
 import logging
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 
 try:
     import requests
@@ -441,6 +442,141 @@ class VaultKv1Secrets:
         self._client._make_request("DELETE", path)
 
 
+class VaultPki:
+    """
+    Handles interactions with the Vault PKI secrets engine (certificate issue, sign, revoke, read, list).
+
+    Supporting documentation (HashiCorp Developer, PKI secrets engine HTTP API):
+
+    - Generate Certificate: https://developer.hashicorp.com/vault/api-docs/secret/pki#generate-certificate-and-key
+    - Sign CSR: https://developer.hashicorp.com/vault/api-docs/secret/pki#sign-certificate
+    - Revoke Certificate: https://developer.hashicorp.com/vault/api-docs/secret/pki#revoke-certificate
+    - Read Certificate: https://developer.hashicorp.com/vault/api-docs/secret/pki#read-certificate
+    - List Certificates: https://developer.hashicorp.com/vault/api-docs/secret/pki#list-certificates
+    - PKI - Secrets Engines - HTTP API: https://developer.hashicorp.com/vault/api-docs/secret/pki
+    """
+
+    def __init__(self, client, mount_path: str = "pki") -> None:
+        """
+        Initialize the PKI client.
+
+        Args:
+            client (VaultClient): An authenticated VaultClient instance.
+            mount_path (str): PKI secrets engine mount path. Defaults to ``pki``.
+        """
+        self._client = client
+        self._mount_path = (mount_path or "pki").strip().strip("/")
+
+    def generate_certificate(self, role: str, common_name: str, extra: Optional[Dict[str, Any]] = None) -> dict:
+        """
+        Generate a new private key and certificate via POST ``/issue/:role``.
+
+        Args:
+            role (str): PKI role name (URL path segment after ``issue/``).
+            common_name (str): Common name for the issued certificate.
+            extra (dict, optional): Additional JSON body fields (e.g. ``alt_names``, ``ip_sans``, ``ttl``, ``format``).
+
+        Returns:
+            dict: Full Vault JSON response (``data`` typically contains ``certificate``, ``private_key``, ``issuing_ca``, etc.).
+
+        Raises:
+            TypeError: If ``common_name`` is not a string or ``extra`` is not a dict when provided.
+        """
+        if not isinstance(common_name, str):
+            raise TypeError("common_name must be a str")
+        if extra is not None and not isinstance(extra, dict):
+            raise TypeError("extra must be a dict")
+
+        body: Dict[str, Any] = {"common_name": common_name}
+        if extra:
+            body.update(extra)
+
+        path = f"v1/{self._mount_path}/issue/{role}"
+        logger.debug("POST PKI issue at role %s", role)
+        return self._client._make_request("POST", path, json=body)
+
+    def sign_certificate(self, role: str, csr: str, extra: Optional[Dict[str, Any]] = None) -> dict:
+        """
+        Sign a certificate signing request via POST ``/sign/:role``.
+
+        Args:
+            role (str): PKI role name (URL path segment after ``sign/``).
+            csr (str): PEM-encoded certificate signing request.
+            extra (dict, optional): Additional JSON body fields (e.g. ``common_name``, ``ttl``, ``format``).
+
+        Returns:
+            dict: Full Vault JSON response (``data`` typically contains ``certificate``, ``issuing_ca``, etc.).
+
+        Raises:
+            TypeError: If ``csr`` is not a string or ``extra`` is not a dict when provided.
+        """
+        if not isinstance(csr, str):
+            raise TypeError("csr must be a str")
+        if extra is not None and not isinstance(extra, dict):
+            raise TypeError("extra must be a dict")
+
+        body: Dict[str, Any] = {"csr": csr}
+        if extra:
+            body.update(extra)
+
+        path = f"v1/{self._mount_path}/sign/{role}"
+        logger.debug("POST PKI sign at role %s", role)
+        return self._client._make_request("POST", path, json=body)
+
+    def revoke_certificate(self, serial_number: str) -> dict:
+        """
+        Revoke a certificate by serial number via POST ``/revoke``.
+
+        Args:
+            serial_number (str): Certificate serial in Vault format (colon-separated hex).
+
+        Returns:
+            dict: Full Vault JSON response.
+
+        Raises:
+            TypeError: If ``serial_number`` is not a string.
+        """
+        if not isinstance(serial_number, str):
+            raise TypeError("serial_number must be a str")
+
+        path = f"v1/{self._mount_path}/revoke"
+        logger.debug("POST PKI revoke serial %s", serial_number)
+        return self._client._make_request("POST", path, json={"serial_number": serial_number})
+
+    def read_certificate(self, serial_number: str) -> dict:
+        """
+        Read certificate metadata and PEM by serial via GET ``/cert/:serial``.
+
+        Args:
+            serial_number (str): Certificate serial (colon-separated hex or Vault ``certs`` list key).
+
+        Returns:
+            dict: Full Vault JSON response (``data`` typically contains ``certificate``).
+
+        Raises:
+            TypeError: If ``serial_number`` is not a string.
+        """
+        if not isinstance(serial_number, str):
+            raise TypeError("serial_number must be a str")
+
+        encoded_serial = quote(serial_number, safe="")
+        path = f"v1/{self._mount_path}/cert/{encoded_serial}"
+        logger.debug("GET PKI cert %s", serial_number)
+        return self._client._make_request("GET", path)
+
+    def list_certificates(self) -> List[str]:
+        """
+        List stored certificate serial numbers via LIST ``/certs`` (see Vault PKI HTTP API).
+
+        Returns:
+            list: Serial numbers (``keys`` from the LIST response ``data``).
+        """
+        path = f"v1/{self._mount_path}/certs"
+        response_data = self._client._make_request("LIST", path)
+        keys = response_data.get("data", {}).get("keys", [])
+        return [k for k in keys if isinstance(k, str)]
+
+
 class VaultAclPolicies:
     """
     Handles interactions with the Vault ACL policy HTTP API (/sys/policy).
@@ -719,3 +855,4 @@ class Secrets:
     def __init__(self, client):
         self.kv2 = VaultKv2Secrets(client)
         self.kv1 = VaultKv1Secrets(client)
+        self.pki = VaultPki(client)
