@@ -30,6 +30,34 @@ from ansible_collections.hashicorp.vault.plugins.module_utils.vault_exceptions i
 logger = logging.getLogger(__name__)
 
 
+def _require_str(param: str, value: Any) -> None:
+    """Raise TypeError if value is not a str (strict runtime check for API path/body inputs)."""
+    if not isinstance(value, str):
+        raise TypeError("{0} must be a str".format(param))
+
+
+def _require_optional_dict(param: str, value: Any) -> None:
+    """Raise TypeError if value is provided and not a dict."""
+    if value is not None and not isinstance(value, dict):
+        raise TypeError("{0} must be a dict".format(param))
+
+
+def _require_pki_role_name(param: str, value: Any) -> None:
+    """
+    Validate a PKI role name before it is interpolated into a request path.
+
+    Rejects values that would produce ambiguous or multi-segment paths (e.g. empty
+    or containing ``/``).
+    """
+    _require_str(param, value)
+    if value != value.strip():
+        raise ValueError("{0} must not have leading or trailing whitespace".format(param))
+    if not value:
+        raise ValueError("{0} must be non-empty".format(param))
+    if "/" in value:
+        raise ValueError("{0} must not contain '/'".format(param))
+
+
 class VaultClient:
     """
     A client for interacting with the HashiCorp Vault HTTP API.
@@ -463,9 +491,14 @@ class VaultPki:
         Args:
             client (VaultClient): An authenticated VaultClient instance.
             mount_path (str): PKI secrets engine mount path. Defaults to ``pki``.
+
+        Raises:
+            TypeError: If ``mount_path`` is not a string after applying the default for falsy values.
         """
         self._client = client
-        self._mount_path = (mount_path or "pki").strip().strip("/")
+        coalesced = mount_path if mount_path else "pki"
+        _require_str("mount_path", coalesced)
+        self._mount_path = coalesced.strip().strip("/")
 
     def generate_certificate(self, role: str, common_name: str, extra: Optional[Dict[str, Any]] = None) -> dict:
         """
@@ -480,50 +513,55 @@ class VaultPki:
             dict: Full Vault JSON response (``data`` typically contains ``certificate``, ``private_key``, ``issuing_ca``, etc.).
 
         Raises:
-            TypeError: If ``common_name`` is not a string or ``extra`` is not a dict when provided.
+            TypeError: If ``role`` or ``common_name`` is not a string, or ``extra`` is not a dict when provided.
+            ValueError: If ``role`` is empty, has leading/trailing whitespace, or contains ``/``.
         """
-        if not isinstance(common_name, str):
-            raise TypeError("common_name must be a str")
-        if extra is not None and not isinstance(extra, dict):
-            raise TypeError("extra must be a dict")
+        _require_pki_role_name("role", role)
+        _require_str("common_name", common_name)
+        _require_optional_dict("extra", extra)
 
         body: Dict[str, Any] = {"common_name": common_name}
-        if extra:
+        if extra is not None:
             body.update(extra)
 
         path = f"v1/{self._mount_path}/issue/{role}"
         logger.debug("POST PKI issue at role %s", role)
+        logger.debug("POST PKI issue %s at role %s", path, role)
         return self._client._make_request("POST", path, json=body)
 
-    def sign_certificate(self, role: str, csr: str, extra: Optional[Dict[str, Any]] = None) -> dict:
+    def sign_certificate(self, role: str, csr: str, common_name: str, extra: Optional[Dict[str, Any]] = None) -> dict:
         """
         Sign a certificate signing request via POST ``/sign/:role``.
 
         Args:
             role (str): PKI role name (URL path segment after ``sign/``).
             csr (str): PEM-encoded certificate signing request.
-            extra (dict, optional): Additional JSON body fields (e.g. ``common_name``, ``ttl``, ``format``).
+            common_name (str): Common name for the signed certificate (required by the Vault PKI API).
+            extra (dict, optional): Additional JSON body fields (e.g. ``alt_names``, ``ip_sans``, ``ttl``, ``format``).
+                If ``common_name`` is present in ``extra``, it overrides this argument.
 
         Returns:
             dict: Full Vault JSON response (``data`` typically contains ``certificate``, ``issuing_ca``, etc.).
 
         Raises:
-            TypeError: If ``csr`` is not a string or ``extra`` is not a dict when provided.
+            TypeError: If ``role``, ``csr``, or ``common_name`` is not a string, or ``extra`` is not a dict when provided.
+            ValueError: If ``role`` is empty, has leading/trailing whitespace, or contains ``/``.
         """
-        if not isinstance(csr, str):
-            raise TypeError("csr must be a str")
-        if extra is not None and not isinstance(extra, dict):
-            raise TypeError("extra must be a dict")
+        _require_pki_role_name("role", role)
+        _require_str("csr", csr)
+        _require_str("common_name", common_name)
+        _require_optional_dict("extra", extra)
 
-        body: Dict[str, Any] = {"csr": csr}
-        if extra:
+        body: Dict[str, Any] = {"csr": csr, "common_name": common_name}
+        if extra is not None:
             body.update(extra)
 
         path = f"v1/{self._mount_path}/sign/{role}"
         logger.debug("POST PKI sign at role %s", role)
+        logger.debug("POST PKI sign %s at role %s", path, role)
         return self._client._make_request("POST", path, json=body)
 
-    def revoke_certificate(self, serial_number: str) -> dict:
+    def revoke_certificate(self, serial_number: str) -> Dict[str, Any]:
         """
         Revoke a certificate by serial number via POST ``/revoke``.
 
@@ -536,14 +574,14 @@ class VaultPki:
         Raises:
             TypeError: If ``serial_number`` is not a string.
         """
-        if not isinstance(serial_number, str):
-            raise TypeError("serial_number must be a str")
+        _require_str("serial_number", serial_number)
 
         path = f"v1/{self._mount_path}/revoke"
         logger.debug("POST PKI revoke serial %s", serial_number)
+        logger.debug("POST PKI revoke %s", path)
         return self._client._make_request("POST", path, json={"serial_number": serial_number})
 
-    def read_certificate(self, serial_number: str) -> dict:
+    def read_certificate(self, serial_number: str) -> Dict[str, Any]:
         """
         Read certificate metadata and PEM by serial via GET ``/cert/:serial``.
 
@@ -556,12 +594,12 @@ class VaultPki:
         Raises:
             TypeError: If ``serial_number`` is not a string.
         """
-        if not isinstance(serial_number, str):
-            raise TypeError("serial_number must be a str")
+        _require_str("serial_number", serial_number)
 
         encoded_serial = quote(serial_number, safe="")
         path = f"v1/{self._mount_path}/cert/{encoded_serial}"
         logger.debug("GET PKI cert %s", serial_number)
+        logger.debug("GET PKI cert %s", path)
         return self._client._make_request("GET", path)
 
     def list_certificates(self) -> List[str]:

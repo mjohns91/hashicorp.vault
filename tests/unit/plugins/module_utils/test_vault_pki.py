@@ -63,6 +63,12 @@ def sign_response():
     }
 
 
+class TestVaultPkiInit:
+    def test_mount_path_type_error(self, authenticated_client):
+        with pytest.raises(TypeError, match="mount_path must be a str"):
+            VaultPki(authenticated_client, mount_path=123)  # type: ignore[arg-type]
+
+
 class TestVaultPkiGenerateCertificate:
     def test_generate_certificate_success(self, authenticated_client, issue_response):
         authenticated_client._make_request.return_value = issue_response
@@ -90,10 +96,42 @@ class TestVaultPkiGenerateCertificate:
             json={"common_name": "svc.example.com", "ttl": "720h", "ip_sans": "127.0.0.1"},
         )
 
+    def test_generate_certificate_extra_empty_dict(self, authenticated_client, issue_response):
+        authenticated_client._make_request.return_value = issue_response
+        pki = VaultPki(authenticated_client)
+
+        pki.generate_certificate("server", "svc.example.com", extra={})
+
+        authenticated_client._make_request.assert_called_once_with(
+            "POST",
+            "v1/pki/issue/server",
+            json={"common_name": "svc.example.com"},
+        )
+
     def test_generate_certificate_common_name_type_error(self, authenticated_client):
         pki = VaultPki(authenticated_client)
         with pytest.raises(TypeError, match="common_name must be a str"):
             pki.generate_certificate("server", 123)  # type: ignore[arg-type]
+
+    def test_generate_certificate_role_type_error(self, authenticated_client):
+        pki = VaultPki(authenticated_client)
+        with pytest.raises(TypeError, match="role must be a str"):
+            pki.generate_certificate(123, "cn")  # type: ignore[arg-type]
+
+    def test_generate_certificate_role_empty(self, authenticated_client):
+        pki = VaultPki(authenticated_client)
+        with pytest.raises(ValueError, match="role must be non-empty"):
+            pki.generate_certificate("", "cn")
+
+    def test_generate_certificate_role_slashes(self, authenticated_client):
+        pki = VaultPki(authenticated_client)
+        with pytest.raises(ValueError, match="role must not contain"):
+            pki.generate_certificate("evil/role", "cn")
+
+    def test_generate_certificate_role_leading_whitespace(self, authenticated_client):
+        pki = VaultPki(authenticated_client)
+        with pytest.raises(ValueError, match="role must not have leading or trailing whitespace"):
+            pki.generate_certificate(" server", "cn")
 
     def test_generate_certificate_extra_type_error(self, authenticated_client):
         pki = VaultPki(authenticated_client)
@@ -119,12 +157,12 @@ class TestVaultPkiSignCertificate:
         pki = VaultPki(authenticated_client)
         csr = "-----BEGIN CERTIFICATE REQUEST-----\nMIIC...\n-----END CERTIFICATE REQUEST-----\n"
 
-        result = pki.sign_certificate(role="server", csr=csr)
+        result = pki.sign_certificate(role="server", csr=csr, common_name="svc.example.com")
 
         authenticated_client._make_request.assert_called_once_with(
             "POST",
             "v1/pki/sign/server",
-            json={"csr": csr},
+            json={"csr": csr, "common_name": "svc.example.com"},
         )
         assert result == sign_response
 
@@ -133,7 +171,7 @@ class TestVaultPkiSignCertificate:
         pki = VaultPki(authenticated_client)
         csr = "-----BEGIN CERTIFICATE REQUEST-----\nMIIC...\n-----END CERTIFICATE REQUEST-----\n"
 
-        pki.sign_certificate("server", csr, extra={"ttl": "24h", "common_name": "override.example.com"})
+        pki.sign_certificate("server", csr, "signed.example.com", extra={"ttl": "24h", "common_name": "override.example.com"})
 
         authenticated_client._make_request.assert_called_once_with(
             "POST",
@@ -145,15 +183,53 @@ class TestVaultPkiSignCertificate:
             },
         )
 
+    def test_sign_certificate_extra_empty_dict(self, authenticated_client, sign_response):
+        authenticated_client._make_request.return_value = sign_response
+        pki = VaultPki(authenticated_client)
+        csr = "-----BEGIN CERTIFICATE REQUEST-----\nMIIC...\n-----END CERTIFICATE REQUEST-----\n"
+
+        pki.sign_certificate("server", csr, "svc.example.com", extra={})
+
+        authenticated_client._make_request.assert_called_once_with(
+            "POST",
+            "v1/pki/sign/server",
+            json={"csr": csr, "common_name": "svc.example.com"},
+        )
+
+    def test_sign_certificate_role_type_error(self, authenticated_client):
+        pki = VaultPki(authenticated_client)
+        with pytest.raises(TypeError, match="role must be a str"):
+            pki.sign_certificate(123, "pem", "cn")  # type: ignore[arg-type]
+
+    def test_sign_certificate_role_slashes(self, authenticated_client):
+        pki = VaultPki(authenticated_client)
+        with pytest.raises(ValueError, match="role must not contain"):
+            pki.sign_certificate("a/b", "pem", "cn")
+
+    def test_sign_certificate_role_empty(self, authenticated_client):
+        pki = VaultPki(authenticated_client)
+        with pytest.raises(ValueError, match="role must be non-empty"):
+            pki.sign_certificate("", "pem", "cn")
+
+    def test_sign_certificate_role_leading_whitespace(self, authenticated_client):
+        pki = VaultPki(authenticated_client)
+        with pytest.raises(ValueError, match="role must not have leading or trailing whitespace"):
+            pki.sign_certificate("server ", "pem", "cn")
+
     def test_sign_certificate_csr_type_error(self, authenticated_client):
         pki = VaultPki(authenticated_client)
         with pytest.raises(TypeError, match="csr must be a str"):
-            pki.sign_certificate("server", b"not-a-str")  # type: ignore[arg-type]
+            pki.sign_certificate("server", b"not-a-str", "cn")  # type: ignore[arg-type]
+
+    def test_sign_certificate_common_name_type_error(self, authenticated_client):
+        pki = VaultPki(authenticated_client)
+        with pytest.raises(TypeError, match="common_name must be a str"):
+            pki.sign_certificate("server", "pem", 123)  # type: ignore[arg-type]
 
     def test_sign_certificate_extra_type_error(self, authenticated_client):
         pki = VaultPki(authenticated_client)
         with pytest.raises(TypeError, match="extra must be a dict"):
-            pki.sign_certificate("server", "pem", extra=[])  # type: ignore[arg-type]
+            pki.sign_certificate("server", "pem", "cn", extra=[])  # type: ignore[arg-type]
 
 
 class TestVaultPkiRevokeCertificate:
