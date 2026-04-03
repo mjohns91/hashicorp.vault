@@ -525,7 +525,6 @@ class VaultPki:
             body.update(extra)
 
         path = f"v1/{self._mount_path}/issue/{role}"
-        logger.debug("POST PKI issue at role %s", role)
         logger.debug("POST PKI issue %s at role %s", path, role)
         return self._client._make_request("POST", path, json=body)
 
@@ -557,7 +556,6 @@ class VaultPki:
             body.update(extra)
 
         path = f"v1/{self._mount_path}/sign/{role}"
-        logger.debug("POST PKI sign at role %s", role)
         logger.debug("POST PKI sign %s at role %s", path, role)
         return self._client._make_request("POST", path, json=body)
 
