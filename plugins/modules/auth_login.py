@@ -63,6 +63,8 @@ options:
   auth_params:
     description: Optional login parameters specific to the authentication method.
     type: dict
+notes:
+  - For security reasons, this module should be used with B(no_log=true) and (register) functionalities.
 '''
 
 EXAMPLES = r'''
@@ -73,7 +75,7 @@ EXAMPLES = r'''
     auth_params:
       role: "prod-web-role"
 
-- name: Login to a custom mount path via userpass
+- name: Login using aws authentication method
   hashicorp.vault.auth_login:
     url: "https://vault.example.com:8200"
     namespace: "admin/it-ops"
@@ -83,7 +85,7 @@ EXAMPLES = r'''
       iam_http_request_method: "POST"
       iam_request_body: "QWN0aW9uPUdldENhbG..."
       iam_request_headers: "eyJBdXRob3JpemF0aW9uIj..."
-      iam_request_ur": "aHR0cHM6L..."
+      iam_request_url": "aHR0cHM6L..."
       role: "dev-role"
 '''
 
@@ -95,7 +97,7 @@ msg:
 token_id:
   description: The ID of the token resulting from the login operation.
   returned: success
-  type: dict
+  type: str
 authentication:
   description: The authentication details from the Vault server for the login request.
   returned: success

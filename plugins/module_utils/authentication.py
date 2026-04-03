@@ -212,7 +212,7 @@ class VaultLogin:
             kwargs (dict, optional): The optional arguments specific to the auth method
 
         Raises
-            VaultCredentialsError: If required parameters are missing
+            VaultLoginError: If required parameters are missing
         """
         for param in self.LOGIN_CONFIG.get(self._auth_method, {}):
             if param not in kwargs or not kwargs.get(param):
@@ -237,14 +237,13 @@ class VaultLogin:
             login_url += f"/{role}"
         elif self._auth_method == "saml":
             login_url = f"{self._vault_address}/v1/auth/{self._mount_path}/token"
-        payload = {key: kwargs.get(key) for key in kwargs}
         headers = {}
 
         if self._namespace:
             headers["X-Vault-Namespace"] = self._namespace
 
         try:
-            response = requests.post(login_url, json=payload, headers=headers, timeout=90)
+            response = requests.post(login_url, json=kwargs, headers=headers, timeout=90)
             response.raise_for_status()
             raw_response = response.json()
 
