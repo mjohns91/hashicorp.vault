@@ -171,7 +171,9 @@ class TestVaultPkiSignCertificate:
         pki = VaultPki(authenticated_client)
         csr = "-----BEGIN CERTIFICATE REQUEST-----\nMIIC...\n-----END CERTIFICATE REQUEST-----\n"
 
-        pki.sign_certificate("server", csr, "signed.example.com", extra={"ttl": "24h", "common_name": "override.example.com"})
+        pki.sign_certificate(
+            "server", csr, "signed.example.com", extra={"ttl": "24h", "common_name": "override.example.com"}
+        )
 
         authenticated_client._make_request.assert_called_once_with(
             "POST",
