@@ -30,34 +30,6 @@ from ansible_collections.hashicorp.vault.plugins.module_utils.vault_exceptions i
 logger = logging.getLogger(__name__)
 
 
-def _require_str(param: str, value: Any) -> None:
-    """Raise TypeError if value is not a str (strict runtime check for API path/body inputs)."""
-    if not isinstance(value, str):
-        raise TypeError("{0} must be a str".format(param))
-
-
-def _require_optional_dict(param: str, value: Any) -> None:
-    """Raise TypeError if value is provided and not a dict."""
-    if value is not None and not isinstance(value, dict):
-        raise TypeError("{0} must be a dict".format(param))
-
-
-def _require_pki_role_name(param: str, value: Any) -> None:
-    """
-    Validate a PKI role name before it is interpolated into a request path.
-
-    Rejects values that would produce ambiguous or multi-segment paths (e.g. empty
-    or containing ``/``).
-    """
-    _require_str(param, value)
-    if value != value.strip():
-        raise ValueError("{0} must not have leading or trailing whitespace".format(param))
-    if not value:
-        raise ValueError("{0} must be non-empty".format(param))
-    if "/" in value:
-        raise ValueError("{0} must not contain '/'".format(param))
-
-
 class VaultClient:
     """
     A client for interacting with the HashiCorp Vault HTTP API.
@@ -484,6 +456,34 @@ class VaultPki:
     - PKI - Secrets Engines - HTTP API: https://developer.hashicorp.com/vault/api-docs/secret/pki
     """
 
+    @staticmethod
+    def _require_str(param: str, value: Any) -> None:
+        """Raise TypeError if value is not a str (strict runtime check for API path/body inputs)."""
+        if not isinstance(value, str):
+            raise TypeError("{0} must be a str".format(param))
+
+    @staticmethod
+    def _require_optional_dict(param: str, value: Any) -> None:
+        """Raise TypeError if value is provided and not a dict."""
+        if value is not None and not isinstance(value, dict):
+            raise TypeError("{0} must be a dict".format(param))
+
+    @staticmethod
+    def _require_pki_role_name(param: str, value: Any) -> None:
+        """
+        Validate a PKI role name before it is interpolated into a request path.
+
+        Rejects values that would produce ambiguous or multi-segment paths (e.g. empty
+        or containing ``/``).
+        """
+        VaultPki._require_str(param, value)
+        if value != value.strip():
+            raise ValueError("{0} must not have leading or trailing whitespace".format(param))
+        if not value:
+            raise ValueError("{0} must be non-empty".format(param))
+        if "/" in value:
+            raise ValueError("{0} must not contain '/'".format(param))
+
     def __init__(self, client, mount_path: str = "pki") -> None:
         """
         Initialize the PKI client.
@@ -497,7 +497,7 @@ class VaultPki:
         """
         self._client = client
         coalesced = mount_path if mount_path else "pki"
-        _require_str("mount_path", coalesced)
+        self._require_str("mount_path", coalesced)
         self._mount_path = coalesced.strip().strip("/")
 
     def generate_certificate(self, role: str, common_name: str, extra: Optional[Dict[str, Any]] = None) -> dict:
@@ -516,9 +516,9 @@ class VaultPki:
             TypeError: If ``role`` or ``common_name`` is not a string, or ``extra`` is not a dict when provided.
             ValueError: If ``role`` is empty, has leading/trailing whitespace, or contains ``/``.
         """
-        _require_pki_role_name("role", role)
-        _require_str("common_name", common_name)
-        _require_optional_dict("extra", extra)
+        self._require_pki_role_name("role", role)
+        self._require_str("common_name", common_name)
+        self._require_optional_dict("extra", extra)
 
         body: Dict[str, Any] = {"common_name": common_name}
         if extra is not None:
@@ -546,10 +546,10 @@ class VaultPki:
             TypeError: If ``role``, ``csr``, or ``common_name`` is not a string, or ``extra`` is not a dict when provided.
             ValueError: If ``role`` is empty, has leading/trailing whitespace, or contains ``/``.
         """
-        _require_pki_role_name("role", role)
-        _require_str("csr", csr)
-        _require_str("common_name", common_name)
-        _require_optional_dict("extra", extra)
+        self._require_pki_role_name("role", role)
+        self._require_str("csr", csr)
+        self._require_str("common_name", common_name)
+        self._require_optional_dict("extra", extra)
 
         body: Dict[str, Any] = {"csr": csr, "common_name": common_name}
         if extra is not None:
@@ -570,8 +570,8 @@ class VaultPki:
         The request body must include exactly one of ``serial_number`` or ``certificate``.
 
         Args:
-            serial_number (str, optional): Certificate serial in Vault format (colon-separated hex).
-            certificate (str, optional): PEM-encoded certificate to revoke.
+            serial_number (str, optional): Certificate serial in Vault format (colon-separated hex). Omit when using ``certificate``.
+            certificate (str, optional): PEM-encoded certificate to revoke. Omit when using ``serial_number``.
 
         Returns:
             dict: Full Vault JSON response.
@@ -581,9 +581,9 @@ class VaultPki:
             ValueError: If both or neither of ``serial_number`` and ``certificate`` are set.
         """
         if serial_number is not None:
-            _require_str("serial_number", serial_number)
+            self._require_str("serial_number", serial_number)
         if certificate is not None:
-            _require_str("certificate", certificate)
+            self._require_str("certificate", certificate)
 
         has_serial = serial_number is not None
         has_cert = certificate is not None
@@ -613,7 +613,7 @@ class VaultPki:
         Raises:
             TypeError: If ``serial_number`` is not a string.
         """
-        _require_str("serial_number", serial_number)
+        self._require_str("serial_number", serial_number)
 
         encoded_serial = quote(serial_number, safe="")
         path = f"v1/{self._mount_path}/cert/{encoded_serial}"
@@ -907,7 +907,13 @@ class VaultNamespaces:
 
 
 class Secrets:
-    """A container class for different secrets engine clients."""
+    """A container class for different secrets engine clients.
+
+    Attributes:
+        kv1: Key-Value version 1 secrets engine
+        kv2: Key-Value version 2 secrets engine
+        pki: PKI (Public Key Infrastructure) secrets engine
+    """
 
     def __init__(self, client):
         self.kv2 = VaultKv2Secrets(client)
