@@ -221,7 +221,7 @@ class TestCreateOrUpdateDynamicRole:
             "creation_statements": ["CREATE ROLE ..."],
         }
 
-        with pytest.raises(TypeError, match='config must contain "db_name"'):
+        with pytest.raises(ValueError, match='config must contain "db_name"'):
             dynamic_roles.create_or_update_dynamic_role(TEST_ROLE_NAME, config)
         authenticated_client._make_request.assert_not_called()
 
@@ -242,7 +242,7 @@ class TestCreateOrUpdateDynamicRole:
             "db_name": "my-db",
         }
 
-        with pytest.raises(TypeError, match='config must contain "creation_statements"'):
+        with pytest.raises(ValueError, match='config must contain "creation_statements"'):
             dynamic_roles.create_or_update_dynamic_role(TEST_ROLE_NAME, config)
         authenticated_client._make_request.assert_not_called()
 
@@ -253,7 +253,18 @@ class TestCreateOrUpdateDynamicRole:
             "creation_statements": "CREATE ROLE ...",  # Should be list
         }
 
-        with pytest.raises(TypeError, match='config\\["creation_statements"\\] must be a list'):
+        with pytest.raises(ValueError, match='config\\["creation_statements"\\] must be a non-empty list'):
+            dynamic_roles.create_or_update_dynamic_role(TEST_ROLE_NAME, config)
+        authenticated_client._make_request.assert_not_called()
+
+    def test_create_or_update_dynamic_role_empty_creation_statements(self, authenticated_client):
+        dynamic_roles = VaultDatabaseDynamicRoles(authenticated_client)
+        config = {
+            "db_name": "my-db",
+            "creation_statements": [],  # Empty list
+        }
+
+        with pytest.raises(ValueError, match='config\\["creation_statements"\\] must be a non-empty list'):
             dynamic_roles.create_or_update_dynamic_role(TEST_ROLE_NAME, config)
         authenticated_client._make_request.assert_not_called()
 

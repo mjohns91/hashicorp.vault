@@ -428,7 +428,20 @@ class VaultDatabaseDynamicRoles:
         self._client = client
         self._mount_path = (mount_path or "database").strip().strip("/")
 
-    def list_dynamic_roles(self) -> list:
+    def _role_path(self, name: Optional[str] = None) -> str:
+        """
+        Build the API path for dynamic role operations.
+
+        Args:
+            name (str, optional): The role name. If None, returns the base roles path.
+
+        Returns:
+            str: The full API path for the role operation.
+        """
+        base = f"v1/{self._mount_path}/roles"
+        return f"{base}/{name}" if name else base
+
+    def list_dynamic_roles(self) -> List[str]:
         """
         List all dynamic role names.
 
@@ -439,7 +452,7 @@ class VaultDatabaseDynamicRoles:
             roles = db.list_dynamic_roles()
             # Returns: ["readonly", "readwrite"]
         """
-        path = f"v1/{self._mount_path}/roles"
+        path = self._role_path()
         try:
             response_data = self._client._make_request("LIST", path)
             roles = response_data.get("data", {}).get("keys", [])
@@ -448,7 +461,7 @@ class VaultDatabaseDynamicRoles:
             # Vault returns 404 when no roles exist
             return []
 
-    def read_dynamic_role(self, name: str) -> dict:
+    def read_dynamic_role(self, name: str) -> Dict[str, Any]:
         """
         Read the configuration of a dynamic role.
 
@@ -456,7 +469,7 @@ class VaultDatabaseDynamicRoles:
             name (str): The name of the dynamic role to read.
 
         Returns:
-            dict: The dynamic role configuration data.
+            Dict[str, Any]: The dynamic role configuration data.
 
         Raises:
             VaultSecretNotFoundError: If the role doesn't exist.
@@ -470,17 +483,17 @@ class VaultDatabaseDynamicRoles:
             #     "max_ttl": 86400
             # }
         """
-        path = f"v1/{self._mount_path}/roles/{name}"
+        path = self._role_path(name)
         response_data = self._client._make_request("GET", path)
         return response_data.get("data", {})
 
-    def create_or_update_dynamic_role(self, name: str, config: dict) -> dict:
+    def create_or_update_dynamic_role(self, name: str, config: Dict[str, Any]) -> Dict[str, Any]:
         """
         Create or update a dynamic role configuration.
 
         Args:
             name (str): The name of the dynamic role.
-            config (dict): Role configuration containing:
+            config (Dict[str, Any]): Role configuration containing:
                 - db_name (str, required): Name of the database connection to use
                 - creation_statements (list, required): SQL statements to create credentials
                 - default_ttl (int, optional): Default TTL for credentials in seconds
@@ -492,10 +505,11 @@ class VaultDatabaseDynamicRoles:
                 - credential_config (dict, optional): Additional credential configuration
 
         Returns:
-            dict: Response from Vault (typically empty dict on success).
+            Dict[str, Any]: Response from Vault (typically empty dict on success).
 
         Raises:
-            TypeError: If config is not a dict, or required fields are missing/invalid.
+            TypeError: If config is not a dict.
+            ValueError: If a required field is missing/invalid.
 
         Example:
             db.create_or_update_dynamic_role(
@@ -514,15 +528,17 @@ class VaultDatabaseDynamicRoles:
         if not isinstance(config, dict):
             raise TypeError("config must be a dict")
         if "db_name" not in config:
-            raise TypeError('config must contain "db_name"')
+            raise ValueError('config must contain "db_name"')
         if not isinstance(config["db_name"], str):
             raise TypeError('config["db_name"] must be a str')
         if "creation_statements" not in config:
-            raise TypeError('config must contain "creation_statements"')
-        if not isinstance(config["creation_statements"], list):
-            raise TypeError('config["creation_statements"] must be a list')
+            raise ValueError('config must contain "creation_statements"')
 
-        path = f"v1/{self._mount_path}/roles/{name}"
+        statements = config["creation_statements"]
+        if not isinstance(statements, list) or not statements:
+            raise ValueError('config["creation_statements"] must be a non-empty list')
+
+        path = self._role_path(name)
         return self._client._make_request("POST", path, json=config)
 
     def delete_dynamic_role(self, name: str) -> None:
@@ -538,7 +554,7 @@ class VaultDatabaseDynamicRoles:
         Example:
             db.delete_dynamic_role("readonly")
         """
-        path = f"v1/{self._mount_path}/roles/{name}"
+        path = self._role_path(name)
         self._client._make_request("DELETE", path)
 
 
