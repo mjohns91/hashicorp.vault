@@ -1,4 +1,2 @@
 ---
-vault_version: "1.21.4"
-vault_archive_url: "https://releases.hashicorp.com/vault/{{ vault_version }}/vault_{{ vault_version }}_{{ ansible_system | lower }}_{{ ansible_userspace_architecture | lower }}.zip"
 vault_server_name: "ansible-vault-dev"

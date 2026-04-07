@@ -169,9 +169,3 @@
         - "{{ ansible_postgresql_container_name }}"
         - "{{ ansible_test_vault_server_container_name }}"
       ignore_errors: true
-
-    - name: Delete temporary directory for vault executable
-      ansible.builtin.file:
-        state: absent
-        path: "{{ ansible_test_vault_path | dirname }}"
-      ignore_errors: true
