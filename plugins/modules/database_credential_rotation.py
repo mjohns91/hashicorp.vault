@@ -47,7 +47,7 @@ EXAMPLES = """
   hashicorp.vault.database_credential_rotation:
     url: https://vault.example.com:8200
     token: "{{ vault_token }}"
-    name: my-state-role
+    name: my-static-role
     credential_type: role
 
 - name: Rotate root user credentials on custom database mount path
