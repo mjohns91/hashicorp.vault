@@ -383,7 +383,7 @@ class VaultTokens:
             token_id (str): The ID of the token to list accessors.
 
         Returns:
-            list: A list of token for the accessors.
+            list: A list of token accessor IDs visible to the provided token.
         """
         path = "v1/auth/token/accessors"
 
