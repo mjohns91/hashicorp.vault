@@ -11,8 +11,10 @@ from unittest.mock import MagicMock
 import pytest
 
 from ansible_collections.hashicorp.vault.plugins.module_utils.vault_client import (
-    Database,
     VaultClient,
+)
+from ansible_collections.hashicorp.vault.plugins.module_utils.vault_database import (
+    Database,
     VaultDatabaseConnection,
     VaultDatabaseDynamicRoles,
     VaultDatabaseStaticRoles,
