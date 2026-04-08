@@ -12,6 +12,8 @@ import pytest
 
 from ansible_collections.hashicorp.vault.plugins.module_utils.vault_client import (
     VaultClient,
+)
+from ansible_collections.hashicorp.vault.plugins.module_utils.vault_database import (
     VaultDatabaseDynamicRoles,
 )
 from ansible_collections.hashicorp.vault.plugins.module_utils.vault_exceptions import (
@@ -213,6 +215,18 @@ class TestCreateOrUpdateDynamicRole:
 
         with pytest.raises(TypeError, match="config must be a dict"):
             dynamic_roles.create_or_update_dynamic_role(TEST_ROLE_NAME, "invalid_config")
+        authenticated_client._make_request.assert_not_called()
+
+    def test_create_or_update_dynamic_role_invalid_name_type(self, authenticated_client):
+        dynamic_roles = VaultDatabaseDynamicRoles(authenticated_client)
+        with pytest.raises(TypeError, match="name must be a str"):
+            dynamic_roles.create_or_update_dynamic_role(123, sample_dynamic_role_config)
+        authenticated_client._make_request.assert_not_called()
+
+    def test_create_or_update_dynamic_role_missing_name(self, authenticated_client):
+        dynamic_roles = VaultDatabaseDynamicRoles(authenticated_client)
+        with pytest.raises(ValueError, match="name must be a non-empty string"):
+            dynamic_roles.create_or_update_dynamic_role("", sample_dynamic_role_config)
         authenticated_client._make_request.assert_not_called()
 
     def test_create_or_update_dynamic_role_missing_db_name(self, authenticated_client):
