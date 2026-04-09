@@ -12,7 +12,7 @@ __metaclass__ = type
 DOCUMENTATION = r'''
 ---
 module: auth_login
-short_description: Authenticate to HashiCorp Vault.
+short_description: Authenticate to HashiCorp Vault
 description:
   - Authenticates to Hashicorp vault and returns generated token.
 version_added: "1.2.0"
