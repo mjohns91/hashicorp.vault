@@ -22,14 +22,17 @@ from ansible_collections.hashicorp.vault.plugins.module_utils.vault_exceptions i
 )
 
 
-class VaultDatabaseConnection:
+class VaultDatabaseParent:
     """
-    Handles interactions with Vault Database Secrets Engine connections.
+    Base class for Vault Database Secrets Engine client classes.
+
+    Provides common initialization for database-related clients that interact
+    with a specific mount path.
     """
 
     def __init__(self, client, mount_path="database"):
         """
-        Initializes the Database connection client.
+        Initialize the database client.
 
         Args:
             client (VaultClient): An authenticated instance of the main VaultClient.
@@ -37,6 +40,12 @@ class VaultDatabaseConnection:
         """
         self._client = client
         self._mount_path = (mount_path or "database").strip().strip("/")
+
+
+class VaultDatabaseConnection(VaultDatabaseParent):
+    """
+    Handles interactions with Vault Database Secrets Engine connections.
+    """
 
     def list_connections(self) -> list:
         """
@@ -146,21 +155,10 @@ class VaultDatabaseConnection:
         self._client._make_request("POST", path, json={})
 
 
-class VaultDatabaseStaticRoles:
+class VaultDatabaseStaticRoles(VaultDatabaseParent):
     """
     Handles interactions with Vault Database Secrets Engine static roles.
     """
-
-    def __init__(self, client, mount_path="database"):
-        """
-        Initializes the Database static roles client.
-
-        Args:
-            client (VaultClient): An authenticated instance of the main VaultClient.
-            mount_path (str): The mount path of the database secrets engine. Defaults to "database".
-        """
-        self._client = client
-        self._mount_path = (mount_path or "database").strip().strip("/")
 
     def list_static_roles(self, read_snapshot_id: Optional[str] = None) -> list:
         """
@@ -279,23 +277,12 @@ class VaultDatabaseStaticRoles:
         return response_data.get("data", {})
 
 
-class VaultDatabaseDynamicRoles:
+class VaultDatabaseDynamicRoles(VaultDatabaseParent):
     """
     Handles interactions with Vault Database Secrets Engine dynamic roles.
 
     Dynamic roles generate database credentials on-demand with configurable TTLs.
     """
-
-    def __init__(self, client, mount_path="database"):
-        """
-        Initializes the Database dynamic roles client.
-
-        Args:
-            client (VaultClient): An authenticated instance of the main VaultClient.
-            mount_path (str): The mount path of the database secrets engine. Defaults to "database".
-        """
-        self._client = client
-        self._mount_path = (mount_path or "database").strip().strip("/")
 
     def _role_path(self, name: Optional[str] = None) -> str:
         """
@@ -477,6 +464,7 @@ class Database:
 
 
 __all__ = [
+    'VaultDatabaseParent',
     'Database',
     'VaultDatabaseConnection',
     'VaultDatabaseStaticRoles',
