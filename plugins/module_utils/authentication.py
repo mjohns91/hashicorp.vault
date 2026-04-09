@@ -218,15 +218,15 @@ class VaultLogin:
             if param not in kwargs or not kwargs.get(param):
                 raise VaultLoginError(f"Missing required parameter {param!r} for {self._auth_method!r} login.")
 
-    def login(self, **kwargs: Any) -> Tuple[str, Dict[str, Any]]:
+    def _build_login_url(self, **kwargs: Any) -> str:
         """
-        Fetch a token.
+        Build the login URL specific to the authentication method
 
         Args:
             kwargs (dict, optional): The optional arguments specific to the auth method.
 
-        Returns
-            (str, dict): The client token and the dict representing the result of the login request
+        Returns:
+            str: The resulting login url
         """
         login_url = f"{self._vault_address}/v1/auth/{self._mount_path}/login"
         if self._auth_method in ("ldap", "okta", "userpass"):
@@ -237,6 +237,20 @@ class VaultLogin:
             login_url += f"/{role}"
         elif self._auth_method == "saml":
             login_url = f"{self._vault_address}/v1/auth/{self._mount_path}/token"
+
+        return login_url
+
+    def login(self, **kwargs: Any) -> Tuple[str, Dict[str, Any]]:
+        """
+        Fetch a token.
+
+        Args:
+            kwargs (dict, optional): The optional arguments specific to the auth method.
+
+        Returns
+            (str, dict): The client token and the dict representing the result of the login request
+        """
+        login_url = self._build_login_url(**kwargs)
         headers = {}
 
         if self._namespace:
