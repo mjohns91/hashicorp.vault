@@ -50,18 +50,18 @@ EXAMPLES = """
 RETURN = """
 serials:
   description: Serial numbers returned by Vault when I(serial_number) is omitted.
-  returned: when I(serial_number) is omitted
+  returned: when O(serial_number) is omitted
   type: list
   elements: str
 certificate_info:
   description:
     - Inner C(data) object from Vault for C(GET .../cert/:serial) (PEM, revocation time, etc.).
     - Empty mapping when the certificate is not found.
-  returned: when I(serial_number) is set
+  returned: when O(serial_number) is set
   type: dict
 raw:
   description: Full Vault JSON envelope when reading a single certificate; omitted for list-only calls.
-  returned: when I(serial_number) is set and the certificate exists
+  returned: when O(serial_number) is set and the certificate exists
   type: dict
 """
 
@@ -101,13 +101,13 @@ def main():
 
     try:
         if serial_number:
-            raw = pki.read_certificate(serial_number)
+            raw = pki.read_certificate(serial_number) or {}
             module.exit_json(
                 changed=False,
-                certificate_info=(raw or {}).get("data") or {},
-                raw=raw or {},
+                certificate_info=raw.get("data") or {},
+                raw=raw,
             )
-        serials = pki.list_certificates()
+        serials = pki.list_certificates() or []
         module.exit_json(changed=False, serials=serials)
 
     except VaultSecretNotFoundError as e:

@@ -223,6 +223,32 @@
           - read_revoked.certificate_info.certificate is defined
       no_log: true
 
+    - name: Revoke leaf certificate by serial (idempotency)
+      hashicorp.vault.pki_certificate:
+        engine_mount_point: "{{ pki_test_mount }}"
+        state: revoked
+        serial_number: "{{ issued_leaf.data.serial_number }}"
+      register: revoked_leaf_idempotency
+      no_log: true
+
+    - name: Assert revoke idempotency
+      ansible.builtin.assert:
+        that:
+          - revoked_leaf_idempotency is not changed
+
+    - name: Revoke leaf certificate by certificate (idempotency)
+      hashicorp.vault.pki_certificate:
+        engine_mount_point: "{{ pki_test_mount }}"
+        state: revoked
+        certificate: "{{ issued_leaf.data.certificate }}"
+      register: revoked_leaf_idempotency
+      no_log: true
+
+    - name: Assert revoke idempotency when using certificate
+      ansible.builtin.assert:
+        that:
+          - revoked_leaf_idempotency is not changed
+
     - name: Revoke signed certificate by serial (cleanup signed leaf)
       hashicorp.vault.pki_certificate:
         engine_mount_point: "{{ pki_test_mount }}"
@@ -236,6 +262,31 @@
         that:
           - revoke_signed is changed
       no_log: true
+
+    - name: Revoke non-existing certificate using serial number (check mode)
+      hashicorp.vault.pki_certificate:
+        engine_mount_point: "{{ pki_test_mount }}"
+        serial_number: "ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff"
+        state: revoked
+      register: pki_revoke_missing_check_mode
+      check_mode: true
+
+    - name: Ensure module did not report change
+      ansible.builtin.assert:
+        that:
+          - pki_revoke_missing_check_mode is not changed
+
+    - name: Revoke non-existing certificate using serial number
+      hashicorp.vault.pki_certificate:
+        engine_mount_point: "{{ pki_test_mount }}"
+        serial_number: "ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff"
+        state: revoked
+      register: pki_revoke_missing
+
+    - name: Ensure module did not report change
+      ansible.builtin.assert:
+        that:
+          - pki_revoke_missing is not changed
 
   always:
     # revoke certs if the block failed before main-path revokes (second revoke is a no-op on success).
