@@ -143,6 +143,9 @@ data:
 """
 
 import copy
+import time
+from datetime import datetime, timezone
+from typing import Any, Dict, NoReturn, Optional, Union
 
 from ansible.module_utils.basic import AnsibleModule
 
@@ -154,10 +157,20 @@ from ansible_collections.hashicorp.vault.plugins.module_utils.vault_client impor
 from ansible_collections.hashicorp.vault.plugins.module_utils.vault_exceptions import (
     VaultApiError,
     VaultPermissionError,
+    VaultSecretNotFoundError,
 )
 
 
-def _csv_option(value):
+def _csv_option(value: Optional[Any]) -> Optional[str]:
+    """
+    Serialize the input into a comma-delimited format.
+
+    Args:
+        value (any): The optional input value.
+
+    Returns:
+        dict: The serialized output into a comma-delimited format.
+    """
     if value is None:
         return None
     if isinstance(value, list):
@@ -165,24 +178,43 @@ def _csv_option(value):
     return value
 
 
-def _build_issue_sign_extra(module, include_private_key_format):
+def _build_issue_sign_extra(module: AnsibleModule, include_private_key_format: bool) -> Dict[str, Union[str, bool]]:
+    """
+    Build the issuance parameter dictionary for the PKI certificate request.
+
+    Args:
+        module (AnsibleModule): The ansible module.
+        include_private_key_format (bool): Specify if the parameter should include the private key format if defined.
+
+    Returns:
+        dict: A dictionary of parameters to issue the certificate.
+    """
     extra = {}
     for key in ("alt_names", "ip_sans", "uri_sans", "other_sans"):
         enc = _csv_option(module.params.get(key))
         if enc is not None:
             extra[key] = enc
-    if module.params.get("ttl") is not None:
-        extra["ttl"] = module.params["ttl"]
-    if module.params.get("format") is not None:
-        extra["format"] = module.params["format"]
-    if module.params.get("exclude_cn_from_sans") is not None:
-        extra["exclude_cn_from_sans"] = module.params["exclude_cn_from_sans"]
+
+    extra.update(
+        {
+            key: module.params.get(key)
+            for key in ("ttl", "format", "exclude_cn_from_sans")
+            if module.params.get(key) is not None
+        }
+    )
     if include_private_key_format and module.params.get("private_key_format") is not None:
         extra["private_key_format"] = module.params["private_key_format"]
     return extra
 
 
-def ensure_issued(module, pki):
+def ensure_issued(module: AnsibleModule, pki: VaultPki) -> NoReturn:
+    """
+    Issue a new PKI certificate when module is not running in check mode.
+
+    Args:
+        module (AnsibleModule): The ansible module.
+        pki (VaultPki): The VaultPKI object.
+    """
     role = module.params["role_name"]
     common_name = module.params["common_name"]
     extra = _build_issue_sign_extra(module, include_private_key_format=True)
@@ -193,16 +225,24 @@ def ensure_issued(module, pki):
             raw={},
             data={},
         )
-    raw = pki.generate_certificate(role, common_name, extra if extra else None)
+    raw = pki.generate_certificate(role, common_name, extra if extra else None) or {}
     module.exit_json(
         changed=True,
         msg="Certificate issued successfully",
-        raw=raw or {},
-        data=(raw or {}).get("data") or {},
+        raw=raw,
+        data=raw.get("data") or {},
     )
 
 
-def ensure_signed(module, pki):
+def ensure_signed(module: AnsibleModule, pki: VaultPki) -> NoReturn:
+    """
+    Sign a new certificate based upon the provided CSR and the supplied parameters
+    when module is not running in check mode.
+
+    Args:
+        module (AnsibleModule): The ansible module.
+        pki (VaultPki): The VaultPKI object.
+    """
     role = module.params["role_name"]
     common_name = module.params["common_name"]
     csr = module.params["csr"]
@@ -214,18 +254,37 @@ def ensure_signed(module, pki):
             raw={},
             data={},
         )
-    raw = pki.sign_certificate(role, csr, common_name, extra if extra else None)
+    raw = pki.sign_certificate(role, csr, common_name, extra if extra else None) or {}
     module.exit_json(
         changed=True,
         msg="Certificate signing request signed successfully",
-        raw=raw or {},
-        data=(raw or {}).get("data") or {},
+        raw=raw,
+        data=raw.get("data") or {},
     )
 
 
-def ensure_revoked(module, pki):
+def ensure_revoked(module: AnsibleModule, pki: VaultPki) -> NoReturn:
+    """
+    Revoke a certificate using its serial number when module is not running in check mode.
+
+    Args:
+        module (AnsibleModule): The ansible module.
+        pki (VaultPki): The VaultPKI object.
+    """
     serial_number = module.params.get("serial_number")
     certificate = module.params.get("certificate")
+
+    # Read existing certificate
+    if serial_number is not None:
+        existing = {}
+        try:
+            existing = pki.read_certificate(serial_number=serial_number)
+        except VaultSecretNotFoundError:
+            pass
+        if not existing or existing.get("data", {}).get("revocation_time", 0) > 0:
+            msg = "Certificate absent" if not existing else "Certificate already revoked"
+            module.exit_json(changed=False, msg=msg)
+
     if module.check_mode:
         module.exit_json(
             changed=True,
@@ -233,12 +292,21 @@ def ensure_revoked(module, pki):
             raw={},
             data={},
         )
-    raw = pki.revoke_certificate(serial_number=serial_number, certificate=certificate)
+    # Capture the current UTC epoch and introduce a one-second buffer to ensure
+    # the revocation timestamp is strictly greater than the initial measurement.
+    epoch_time = datetime.now(timezone.utc).timestamp()
+    time.sleep(1)
+    raw = pki.revoke_certificate(serial_number=serial_number, certificate=certificate) or {}
+    changed = False
+    msg = "Certificate already revoked"
+    if raw.get("data", {}).get("revocation_time", 0) > int(epoch_time):
+        changed = True
+        msg = "Certificate revoked successfully."
     module.exit_json(
-        changed=True,
-        msg="Certificate revoked successfully",
-        raw=raw or {},
-        data=(raw or {}).get("data") or {},
+        changed=changed,
+        msg=msg,
+        raw=raw,
+        data=raw.get("data") or {},
     )
 
 
@@ -278,19 +346,18 @@ def main():
     if state == "revoked":
         if not module.params.get("serial_number") and not module.params.get("certificate"):
             module.fail_json(msg="state is revoked but all of the following are missing: serial_number, certificate")
-        if module.params.get("serial_number") and module.params.get("certificate"):
-            module.fail_json(msg="parameters are mutually exclusive: serial_number|certificate")
 
     client = get_authenticated_client(module)
     pki = VaultPki(client, module.params["engine_mount_point"])
 
+    handlers = {
+        "issued": ensure_issued,
+        "signed": ensure_signed,
+        "revoked": ensure_revoked,
+    }
+
     try:
-        if state == "issued":
-            ensure_issued(module, pki)
-        elif state == "signed":
-            ensure_signed(module, pki)
-        else:
-            ensure_revoked(module, pki)
+        handlers[state](module, pki)
     except VaultPermissionError as e:
         module.fail_json(msg=f"Permission denied: {e}")
     except VaultApiError as e:
