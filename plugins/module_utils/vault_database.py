@@ -56,7 +56,7 @@ class VaultDatabaseConnection(VaultDatabaseParent):
         """
         base = f"v1/{self._mount_path}/config"
         return f"{base}/{name}" if name else base
-    
+
     def list_connections(self) -> list:
         """
         List all available connections.
