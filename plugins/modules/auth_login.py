@@ -85,7 +85,7 @@ EXAMPLES = r'''
       iam_http_request_method: "POST"
       iam_request_body: "QWN0aW9uPUdldENhbG..."
       iam_request_headers: "eyJBdXRob3JpemF0aW9uIj..."
-      iam_request_url": "aHR0cHM6L..."
+      iam_request_url: "aHR0cHM6L..."
       role: "dev-role"
 '''
 
