@@ -47,6 +47,16 @@ class VaultDatabaseConnection(VaultDatabaseParent):
     Handles interactions with Vault Database Secrets Engine connections.
     """
 
+    def _connection_path(self, name: Optional[str] = None) -> str:
+        """
+        Build the API path for connection operations.
+
+        Args:
+            name (str, optional): The connection name. If None, returns the base connections path.
+        """
+        base = f"v1/{self._mount_path}/config"
+        return f"{base}/{name}" if name else base
+    
     def list_connections(self) -> list:
         """
         List all available connections.
@@ -54,7 +64,7 @@ class VaultDatabaseConnection(VaultDatabaseParent):
         Returns:
             List[str]: A list of connection names. Returns empty list if no connections exist.
         """
-        path = f"v1/{self._mount_path}/config"
+        path = self._connection_path()
         try:
             response_data = self._client._make_request("LIST", path)
             connections = response_data.get("data", {}).get("keys", [])
@@ -76,7 +86,7 @@ class VaultDatabaseConnection(VaultDatabaseParent):
         Raises:
             VaultSecretNotFoundError: If the connection doesn't exist.
         """
-        path = f"v1/{self._mount_path}/config/{name}"
+        path = self._connection_path(name)
         response_data = self._client._make_request("GET", path)
         return response_data.get("data", {})
 
@@ -124,7 +134,7 @@ class VaultDatabaseConnection(VaultDatabaseParent):
         if not isinstance(config["plugin_name"], str):
             raise TypeError('config["plugin_name"] must be a str')
 
-        path = f"v1/{self._mount_path}/config/{name}"
+        path = self._connection_path(name)
         return self._client._make_request("POST", path, json=config)
 
     def delete_connection(self, name: str) -> None:
@@ -137,7 +147,7 @@ class VaultDatabaseConnection(VaultDatabaseParent):
         Returns:
             None
         """
-        path = f"v1/{self._mount_path}/config/{name}"
+        path = self._connection_path(name)
         self._client._make_request("DELETE", path)
 
     def reset_connection(self, name: str) -> None:
@@ -160,6 +170,19 @@ class VaultDatabaseStaticRoles(VaultDatabaseParent):
     Handles interactions with Vault Database Secrets Engine static roles.
     """
 
+    def _static_role_path(self, name: Optional[str] = None) -> str:
+        """
+        Build the API path for static role operations.
+
+        Args:
+            name (str, optional): The role name. If None, returns the base roles path.
+
+        Returns:
+            str: The full API path for the static role operation.
+        """
+        base = f"v1/{self._mount_path}/static-roles"
+        return f"{base}/{name}" if name else base
+
     def list_static_roles(self, read_snapshot_id: Optional[str] = None) -> list:
         """
         List all available static roles.
@@ -171,7 +194,7 @@ class VaultDatabaseStaticRoles(VaultDatabaseParent):
         Returns:
             List[str]: A list of static role names. Returns empty list if no static roles exist.
         """
-        path = f"v1/{self._mount_path}/static-roles"
+        path = self._static_role_path()
         params = {}
         if read_snapshot_id is not None:
             params["read_snapshot_id"] = read_snapshot_id
@@ -199,7 +222,7 @@ class VaultDatabaseStaticRoles(VaultDatabaseParent):
         Raises:
             VaultSecretNotFoundError: If the static role doesn't exist
         """
-        path = f"v1/{self._mount_path}/static-roles/{name}"
+        path = self._static_role_path(name)
         params = {}
         if read_snapshot_id is not None:
             params["read_snapshot_id"] = read_snapshot_id
@@ -237,7 +260,7 @@ class VaultDatabaseStaticRoles(VaultDatabaseParent):
         if not isinstance(config, dict):
             raise TypeError("config must be a dict")
 
-        path = f"v1/{self._mount_path}/static-roles/{name}"
+        path = self._static_role_path(name)
         return self._client._make_request("POST", path, json=config)
 
     def delete_static_role(self, name: str) -> None:
@@ -250,7 +273,7 @@ class VaultDatabaseStaticRoles(VaultDatabaseParent):
         Returns:
             None
         """
-        path = f"v1/{self._mount_path}/static-roles/{name}"
+        path = self._static_role_path(name)
         self._client._make_request("DELETE", path)
 
     def get_static_role_credentials(self, name: str, read_snapshot_id: Optional[str] = None) -> dict:
