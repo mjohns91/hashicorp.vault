@@ -5,7 +5,6 @@
 
 from __future__ import absolute_import, division, print_function
 
-
 DOCUMENTATION = """
 ---
 module: database_static_role
@@ -290,7 +289,9 @@ def main() -> None:
             rotation_window=dict(type="raw"),
             rotation_statements=dict(type="list", elements="str"),
             skip_import_rotation=dict(type="bool"),
-            credential_type=dict(type="str", default="password", choices=["password", "rsa_private_key", "client_certificate"]),
+            credential_type=dict(
+                type="str", default="password", choices=["password", "rsa_private_key", "client_certificate"]
+            ),
             credential_config=dict(type="dict", no_log=True),
         )
     )
