@@ -50,7 +50,7 @@
     - name: Rotate root credentials
       hashicorp.vault.database_credential_rotation:
         name: "{{ database_connection_name }}"
-        type: root
+        credential_type: root
       register: rotate_root_creds
 
     - name: Ensure the module reported change
@@ -99,7 +99,7 @@
     - name: Rotate static role credentials
       hashicorp.vault.database_credential_rotation:
         name: "{{ database_static_role_name }}"
-        type: role
+        credential_type: role
       register: rotate_role_creds
 
     - name: Ensure the module reported change
@@ -123,7 +123,7 @@
     - name: Rotate static role credentials once again
       hashicorp.vault.database_credential_rotation:
         name: "{{ database_static_role_name }}"
-        type: role
+        credential_type: role
       register: rotate_role_creds
 
     - name: Ensure the module reported change again

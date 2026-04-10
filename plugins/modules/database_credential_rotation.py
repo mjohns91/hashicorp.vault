@@ -112,7 +112,11 @@ def main():
     db_conn = VaultDatabaseConnection(client, mount_path=database_mount_path)
     try:
         result = db_conn.rotate_credentials(name=name, credential_type=credential_type)
-        module.exit_json(changed=True, raw=result)
+        module.exit_json(
+            changed=True,
+            raw=result,
+            msg=f"Successfully rotated {credential_type} credentials for {name!r}",
+        )
 
     except VaultSecretNotFoundError as e:
         module.fail_json(msg=f"Resource error: {e}")

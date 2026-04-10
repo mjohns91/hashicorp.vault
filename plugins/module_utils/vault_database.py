@@ -183,7 +183,7 @@ class VaultDatabaseConnection(VaultDatabaseParent):
             raise VaultConfigurationError(
                 f"Unexpected used to rotate credential {credential_type!r}, should be one of {credential_type_options}"
             )
-        path = f"v1/{self._mount_path}/rotate-{type}/{name}"
+        path = f"v1/{self._mount_path}/rotate-{credential_type}/{name}"
         self._client._make_request("POST", path, json={})
 
 
