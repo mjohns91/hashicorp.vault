@@ -8,6 +8,3 @@ minor_changes:
     configurations. Returns role details including database connection name, SQL
     statements, and TTL values
     (https://github.com/ansible-collections/hashicorp.vault/pull/107).
-  - meta/runtime.yml - Add ``database_role`` and ``database_role_info`` modules to
-    the ``vault`` action group to enable module_defaults inheritance
-    (https://github.com/ansible-collections/hashicorp.vault/pull/107).
