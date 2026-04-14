@@ -1,0 +1,13 @@
+---
+- name: Remove containers
+  ansible.builtin.command: >-
+    {{ container_runtime }}-compose down --remove-orphans
+  args:
+    chdir: "{{ compose_dir.path }}"
+  ignore_errors: true
+
+- name: Delete temporary directory created for container configuration
+  ansible.builtin.file:
+    state: absent
+    path: "{{ compose_dir.path }}"
+  ignore_errors: true

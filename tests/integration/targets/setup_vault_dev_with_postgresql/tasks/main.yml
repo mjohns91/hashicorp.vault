@@ -1,0 +1,45 @@
+---
+- name: Set vault token for future use
+  ansible.builtin.set_fact:
+    ansible_test_vault_token: "{{ lookup('password', 'dev/null length=12 chars=ascii_letters,digits') }}"
+    ansible_test_vault_url: "http://127.0.0.1:8200"
+    ansible_test_vault_server_container_name: "{{ vault_container_name }}"
+    ansible_postgresql_root_password: "{{ lookup('password', 'dev/null length=16') }}"
+    ansible_postgresql_container_name: "{{ postgresql_container_name }}"
+
+- name: Create temporary file for compose containers configuration
+  ansible.builtin.tempfile:
+    suffix: .compose
+    state: directory
+  register: compose_dir
+  notify: 'Clean resources'
+
+- name: Generate container configuration file
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ compose_dir.path }}/docker-compose.yaml"
+
+- name: Delete old resources
+  ansible.builtin.command: >-
+    {{ container_runtime }}-compose down --remove-orphans
+  args:
+    chdir: "{{ compose_dir.path }}"
+
+- name: Spwan containers
+  ansible.builtin.command: >-
+    {{ container_runtime }}-compose up -d --remove-orphans
+  args:
+    chdir: "{{ compose_dir.path }}"
+
+- name: Vault enable databse engine
+  vault_http_request:
+    url: "{{ ansible_test_vault_url }}/v1/sys/mounts/database"
+    method: POST
+    token: "{{ ansible_test_vault_token }}"
+    payload:
+      type: "database"
+      description: "Database secrets engine"
+  register: result
+  retries: 10
+  delay: 3
+  until: result is successful

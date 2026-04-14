@@ -173,7 +173,7 @@ class VaultDatabaseConnection(VaultDatabaseParent):
         Args:
             name (str): The identifier for the database connection (for root user rotation) or the static role to trigger
                         a password rotation for.
-            type (str): Whether to rotate root or static-role credentials. choices are 'root' or 'role'
+            credential_type (str): Whether to rotate root or static-role credentials. choices are 'root' or 'role'
 
         Returns:
             None
@@ -181,7 +181,7 @@ class VaultDatabaseConnection(VaultDatabaseParent):
         credential_type_options = ('root', 'role')
         if credential_type not in credential_type_options:
             raise VaultConfigurationError(
-                f"Unexpected used to rotate credential {credential_type!r}, should be one of {credential_type_options}"
+                f"Unexpected type used to rotate credential {credential_type!r}, should be one of {credential_type_options}"
             )
         path = f"v1/{self._mount_path}/rotate-{credential_type}/{name}"
         self._client._make_request("POST", path, json={})
