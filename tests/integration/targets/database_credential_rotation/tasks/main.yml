@@ -12,15 +12,11 @@
     database_static_role_name: "ansible-static-role-{{ vault_resource_suffix }}"
     vault_network_name: "vault-net-{{ vault_resource_suffix }}"
   block:
-    # Configure docker network for testing
-    - name: Create docker network
-      ansible.builtin.command: "docker network create {{ vault_network_name }}"
 
-    - name: Attach container to the vault network
-      ansible.builtin.command: "docker network connect {{ vault_network_name }} {{ item }}"
-      loop:
-        - "{{ ansible_postgresql_container_name }}"
-        - "{{ ansible_test_vault_server_container_name }}"
+    - name: Make setup_vault_dev_with_postgresql's modules available
+      ansible.builtin.include_role:
+        name: setup_vault_dev_with_postgresql
+        public: true
 
     - name: Validate connection to the database and create additional user
       postgres_execute:
@@ -143,29 +139,3 @@
       ansible.builtin.assert:
         that:
           - new_role_credentials.auth.last_vault_rotation != role_credentials.auth.last_vault_rotation
-
-  always:
-    - name: Disconnect container from network
-      ansible.builtin.command: "docker network disconnect {{ vault_network_name }} {{ item }}"
-      loop:
-        - "{{ ansible_postgresql_container_name }}"
-        - "{{ ansible_test_vault_server_container_name }}"
-      ignore_errors: true
-
-    - name: Remove docker network
-      ansible.builtin.command: "docker network rm {{ vault_network_name }}"
-      ignore_errors: true
-
-    - name: Stop running containers
-      ansible.builtin.command: "docker container stop {{ item }}"
-      loop:
-        - "{{ ansible_postgresql_container_name }}"
-        - "{{ ansible_test_vault_server_container_name }}"
-      ignore_errors: true
-
-    - name: Remove containers
-      ansible.builtin.command: "docker rm {{ item }}"
-      loop:
-        - "{{ ansible_postgresql_container_name }}"
-        - "{{ ansible_test_vault_server_container_name }}"
-      ignore_errors: true

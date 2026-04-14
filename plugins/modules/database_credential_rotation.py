@@ -63,10 +63,6 @@ msg:
   description: A message describing the result of the operation.
   returned: always
   type: str
-raw:
-  description: The complete response returned by Vault for the rotation operation.
-  returned: success
-  type: dict
 """
 
 import copy
@@ -111,10 +107,9 @@ def main():
 
     db_conn = VaultDatabaseConnection(client, mount_path=database_mount_path)
     try:
-        result = db_conn.rotate_credentials(name=name, credential_type=credential_type)
+        db_conn.rotate_credentials(name=name, credential_type=credential_type)
         module.exit_json(
             changed=True,
-            raw=result,
             msg=f"Successfully rotated {credential_type} credentials for {name!r}",
         )
 
