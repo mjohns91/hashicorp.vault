@@ -65,7 +65,7 @@ def connect_with_retry(module, connection_retries=10, connection_retries_delay=2
             return conn
         except psycopg.OperationalError as e:
             if attempt >= connection_retries:
-                raise e
+                module.fail_json(msg=f"Failed to connect to PostGreSQL database: {e}")
             time.sleep(connection_retries_delay)
             last_e = None
     module.fail_json(msg=f"Failed to connect to PostGreSQL database: {last_e}")
