@@ -15,8 +15,8 @@ version_added: 1.2.0
 author: Chyna Sanders (@chynasan)
 description:
   - Query Vault Enterprise namespaces via the C(/sys/namespaces) API (list or read one namespace).
-  - Omit I(path) to list all namespace paths.
-  - Set I(path) to read that namespace's C(id), C(path), and C(custom_metadata).
+  - Omit O(path) to list all namespace paths.
+  - Set O(path) to read that namespace's C(id), C(path), and C(custom_metadata).
   - Open Source Vault does not expose these APIs; operations will fail with an error from Vault.
 options:
   path:
@@ -56,8 +56,8 @@ RETURN = """
 namespaces:
   description:
     - List of namespace objects returned by C(vault_namespace_info).
-    - Without I(path), returns all namespaces with C(id), C(path), and C(custom_metadata) for each.
-    - With I(path), returns a single entry with C(id), C(path), and C(custom_metadata).
+    - Without O(path), returns all namespaces with C(id), C(path), and C(custom_metadata) for each.
+    - With O(path), returns a single entry with C(id), C(path), and C(custom_metadata).
   returned: always
   type: list
   elements: dict
@@ -66,6 +66,37 @@ namespaces:
       path: "engineering/"
       custom_metadata:
         team: "platform"
+        environment: "prod"
+keys:
+  description:
+    - List of namespace paths returned by Vault when listing namespaces.
+    - Only returned when O(path) is not specified (list operation).
+  returned: when listing all namespaces
+  type: list
+  elements: str
+  sample:
+    - "engineering/"
+    - "finance/"
+    - "operations/"
+key_info:
+  description:
+    - Dictionary mapping namespace paths to their detailed information.
+    - Each entry contains C(id), C(path), and C(custom_metadata) for the namespace.
+    - Only returned when O(path) is not specified (list operation).
+  returned: when listing all namespaces
+  type: dict
+  sample:
+    "engineering/":
+      id: "gsudz"
+      path: "engineering/"
+      custom_metadata:
+        team: "platform"
+        environment: "prod"
+    "finance/":
+      id: "htvek"
+      path: "finance/"
+      custom_metadata:
+        team: "finance"
         environment: "prod"
 """
 
@@ -122,22 +153,7 @@ def main():
             # List all namespaces
             # list_namespaces() returns [{"keys": [...], "key_info": {...}}]
             list_data = client.namespaces.list_namespaces()
-            keys = []
-            key_info = {}
-            namespaces = []
-            if list_data and len(list_data) > 0:
-                data = list_data[0]
-                keys = data.get("keys", [])
-                key_info = data.get("key_info", {})
-
-                for key in keys:
-                    info = key_info.get(key, {})
-                    namespace = {
-                        "id": info.get("id", ""),
-                        "path": info.get("path", key),
-                        "custom_metadata": info.get("custom_metadata", {}),
-                    }
-                    namespaces.append(namespace)
+            namespaces = [v for k, v in list_data[0].get("key_info", {}).items()]
             module.exit_json(
                 changed=False,
                 keys=keys,
