@@ -15,12 +15,174 @@ from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from ansible_collections.hashicorp.vault.plugins.module_utils.vault_exceptions import (
     VaultConfigurationError,
     VaultSecretNotFoundError,
 )
+
+
+def build_config_params(params: Dict[str, Any], param_names: List[str]) -> Dict[str, Any]:
+    """
+    Build a configuration dictionary from specified parameters, excluding None values.
+
+    This utility function extracts a set of parameters from a source dictionary,
+    returning only those parameters that have non-None values. This is useful
+    when building configuration payloads for Vault API calls where None values
+    should be omitted rather than sent as null.
+
+    Works for both required and optional parameters - any parameter with a non-None
+    value will be included in the returned dictionary.
+
+    Args:
+        params: Source dictionary containing parameter values (e.g., module.params).
+        param_names: List of parameter names to extract from params.
+
+    Returns:
+        Dictionary containing only the parameters from param_names that have
+        non-None values in params.
+
+    Example:
+        >>> module_params = {'db_name': 'mydb', 'max_ttl': 3600, 'default_ttl': None}
+        >>> config = build_config_params(module_params, ['db_name', 'max_ttl', 'default_ttl'])
+        >>> config
+        {'db_name': 'mydb', 'max_ttl': 3600}
+    """
+    return {k: v for k in param_names if (v := params.get(k)) is not None}
+
+
+def get_existing_role_or_none(
+    role_client, role_name: str, read_method: Literal['read_dynamic_role', 'read_static_role']
+) -> Optional[Dict[str, Any]]:
+    """
+    Attempt to read a role configuration, returning None if it doesn't exist.
+
+    This helper function provides a consistent pattern for checking role existence
+    across database role modules (both dynamic and static roles). It abstracts the
+    try/except VaultSecretNotFoundError pattern into a reusable utility.
+
+    Args:
+        role_client: The role client instance (e.g., VaultDatabaseDynamicRoles or VaultDatabaseStaticRoles).
+        role_name: Name of the role to read.
+        read_method: Name of the read method to call on the role_client.
+                     Must be either 'read_dynamic_role' or 'read_static_role'.
+
+    Returns:
+        Role configuration dictionary if the role exists, None if it doesn't exist.
+
+    Raises:
+        ValueError: If read_method is not one of the allowed values.
+
+    Example:
+        >>> db_roles = VaultDatabaseDynamicRoles(client, mount_path='database')
+        >>> existing = get_existing_role_or_none(db_roles, 'my-role', 'read_dynamic_role')
+        >>> if existing:
+        ...     print(f"Role exists with config: {existing}")
+        ... else:
+        ...     print("Role does not exist")
+    """
+    # Allowlist of valid read methods for security
+    allowed_methods = {'read_dynamic_role', 'read_static_role'}
+    if read_method not in allowed_methods:
+        raise ValueError(f"Invalid read_method '{read_method}'. Must be one of: {', '.join(sorted(allowed_methods))}")
+
+    try:
+        return getattr(role_client, read_method)(role_name)
+    except VaultSecretNotFoundError:
+        return None
+
+
+def normalize_value(value: Any) -> Any:
+    """
+    Normalize a value for comparison by converting string numbers to integers.
+
+    This utility handles type mismatches between module parameters (always integers
+    due to Ansible validation) and Vault API responses (which may return integers
+    as strings). This ensures idempotent configuration comparisons.
+
+    Args:
+        value: The value to normalize (any type).
+
+    Returns:
+        Normalized value - integer if the input is a numeric string, otherwise
+        the original value unchanged.
+
+    Example:
+        >>> normalize_value("3600")
+        3600
+        >>> normalize_value(3600)
+        3600
+        >>> normalize_value("1h")
+        '1h'
+        >>> normalize_value(None)
+        None
+    """
+    if isinstance(value, str) and value.isdigit():
+        return int(value)
+    return value
+
+
+def compare_vault_configs(existing: Dict[str, Any], desired: Dict[str, Any]) -> bool:
+    """
+    Compare Vault configurations with support for type normalization and nested structures.
+
+    This function performs a semantic comparison of configurations, accounting for:
+    - Type differences (e.g., string "3600" vs int 3600 for TTL/rotation values)
+    - None values in desired config (treated as "don't care")
+    - Nested dict recursion (e.g., credential_config sub-dictionaries)
+    - List ordering preservation (e.g., SQL statements where order matters)
+
+    This unified function supports both dynamic and static database roles, as well as
+    any other Vault configuration comparisons requiring robust type handling.
+
+    Args:
+        existing: The current configuration from Vault.
+        desired: The desired configuration from module parameters.
+
+    Returns:
+        True if configurations match semantically, False otherwise.
+
+    Example:
+        >>> # Type normalization
+        >>> existing = {"default_ttl": "3600", "db_name": "mydb"}
+        >>> desired = {"default_ttl": 3600, "db_name": "mydb"}
+        >>> compare_vault_configs(existing, desired)
+        True
+
+        >>> # Nested dict comparison
+        >>> existing = {"credential_config": {"key_bits": 2048, "algorithm": "rsa"}}
+        >>> desired = {"credential_config": {"key_bits": 2048}}
+        >>> compare_vault_configs(existing, desired)
+        True
+    """
+    # If no existing config, it's definitely changed
+    if not existing:
+        return False
+
+    for key, desired_value in desired.items():
+        existing_value = existing.get(key)
+
+        # Skip None values - user doesn't care about this field
+        if desired_value is None:
+            continue
+
+        # Recursively compare nested dicts (e.g., credential_config)
+        if isinstance(desired_value, dict) and isinstance(existing_value, dict):
+            if not compare_vault_configs(existing_value, desired_value):
+                return False
+
+        # Preserve order for lists (e.g., SQL statements where order matters)
+        elif isinstance(desired_value, list) and isinstance(existing_value, list):
+            if desired_value != existing_value:
+                return False
+
+        # For primitives, normalize types (handle string/int mismatches)
+        else:
+            if normalize_value(existing_value) != normalize_value(desired_value):
+                return False
+
+    return True
 
 
 class VaultDatabaseParent:
@@ -515,4 +677,8 @@ __all__ = [
     'VaultDatabaseConnection',
     'VaultDatabaseStaticRoles',
     'VaultDatabaseDynamicRoles',
+    'build_config_params',
+    'get_existing_role_or_none',
+    'normalize_value',
+    'compare_vault_configs',
 ]
