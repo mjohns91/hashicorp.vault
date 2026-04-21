@@ -231,8 +231,8 @@
 
         - name: Try to find deleted namespaces in list
           ansible.builtin.set_fact:
-            found_deleted_ns_1: "{{ namespaces_after_delete.namespaces | selectattr('path', 'search', vault_namespace_info_test_path_1_normalized) | list | first | default(none) }}"
-            found_deleted_ns_2: "{{ namespaces_after_delete.namespaces | selectattr('path', 'search', vault_namespace_info_test_path_2_normalized) | list | first | default(none) }}"
+            found_deleted_ns_1: "{{ namespaces_after_delete.namespaces | selectattr('path', 'search', vault_namespace_info_test_path_1_normalized) | list }}"
+            found_deleted_ns_2: "{{ namespaces_after_delete.namespaces | selectattr('path', 'search', vault_namespace_info_test_path_2_normalized) | list }}"
 
         - name: Assert deleted namespaces not in list
           ansible.builtin.assert:
@@ -240,8 +240,8 @@
               - namespaces_after_delete.namespaces is defined
               - namespaces_after_delete.namespaces_keys is defined
               - namespaces_after_delete.namespaces_key_info is defined
-              - found_deleted_ns_1 is none
-              - found_deleted_ns_2 is none
+              - found_deleted_ns_1 == []
+              - found_deleted_ns_2 == []
 
         - name: Read deleted namespace 1
           hashicorp.vault.vault_namespace_info:
