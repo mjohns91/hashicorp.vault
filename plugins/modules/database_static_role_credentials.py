@@ -15,7 +15,7 @@ description:
     - Reads the current credentials for a database static role from HashiCorp Vault.
 options:
   database_mount_path:
-    description: Database secret engine mount path.
+    description: Database secrets engine mount path.
     type: str
     default: database
     aliases: [vault_database_mount_path]
@@ -30,7 +30,7 @@ options:
 extends_documentation_fragment:
   - hashicorp.vault.vault_auth.modules
 notes:
-  - For security reasons, this module should be used with B(no_log=true) and (register) functionalities.
+  - For security reasons, use C(no_log=true) and C(register) so raw credentials are not written to the task log.
 """
 
 EXAMPLES = """
